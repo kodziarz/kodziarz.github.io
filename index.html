@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="mainDiv" style="position: relative;"></div>
+    <script>
+
+        let mainDiv = document.getElementById("mainDiv")
+        let gameManager = {
+            gameParams: {
+                GAME_TABLE_WIDTH: 10,
+                GAME_TABLE_HEIGHT: 10,
+                SNAKE_MOVEMENT_INTERVAL: 100
+            },
+            gameVariables: {
+                gameTable: [],
+                snake: {
+                    lastDirection: null,
+                    direction: null,
+                    bodyElements: []
+                },
+                snakeMovementInterval: null
+            },
+            layoutConsts: {
+                gameTableDiv: mainDiv,
+                gameField: {
+                    HEIGHT: 50, //w pikselach
+                    WIDTH: 50 //w pikselach
+                },
+                snakeImagesPaths: {
+                    SNAKE_BEGINNING_UP: "img/snake_top_up.jpg",
+                    SNAKE_BEGINNING_RIGHT: "img/snake_top_right.jpg",
+                    SNAKE_BEGINNING_LEFT: "img/snake_top_left.jpg",
+                    SNAKE_BEGINNING_DOWN: "img/snake_top_down.jpg",
+                    SNAKE_END_UP: "img/snake_bottom_up.png",
+                    SNAKE_END_LEFT: "img/snake_bottom_left.png",
+                    SNAKE_END_RIGHT: "img/snake_bottom_right.png",
+                    SNAKE_END_DOWN: "img/snake_bottom_down.png",
+                    SNAKE_MIDDLE_HORIZONTAL: "img/snake_middle_horizontal.png",
+                    SNAKE_MIDDLE_VERTICAL: "img/snake_middle_vertical.png",
+                    SNAKE_MIDDLE_TURN_DOWN_LEFT: "img/snake_middle_turn_down_left.png",
+                    SNAKE_MIDDLE_TURN_LEFT_UP: "img/snake_middle_turn_left_up.png",
+                    SNAKE_MIDDLE_TURN_UP_RIGHT: "img/snake_middle_turn_up_right.png",
+                    SNAKE_MIDDLE_TURN_RIGHT_DOWN: "img/snake_middle_turn_right_down.png"
+                }
+            },
+            gameConsts: {
+                directions: {
+                    UP: 0,
+                    DOWN: 1,
+                    RIGHT: 2,
+                    LEFT: 3
+                }
+            },
+            // funkcje: 
+            initiateGame: function () {
+                // funkcja gromadzi funkcje inicjujące grę
+                this.drawTable()
+                this.generateSnake()
+            },
+            drawTable: function () {
+                // funkcja rysuje planszę do gry
+
+                for (let x = 0; x < this.gameParams.GAME_TABLE_HEIGHT; x++) {
+                    this.gameVariables.gameTable[x] = []    //utworzenie tablicy na obiekty typu field
+
+                    for (let y = 0; y < this.gameParams.GAME_TABLE_HEIGHT; y++) {
+
+                        // tworzenie diva
+                        let gameFieldDiv = document.createElement("div")
+                        this.layoutConsts.gameTableDiv.appendChild(gameFieldDiv)
+
+                        //formatowanie diva
+                        gameFieldDiv.style.width = this.layoutConsts.gameField.HEIGHT + "px"
+                        gameFieldDiv.style.height = this.layoutConsts.gameField.WIDTH + "px"
+                        gameFieldDiv.style.border = "1px solid black"
+                        gameFieldDiv.style.position = "absolute"
+                        gameFieldDiv.style.left = this.layoutConsts.gameField.WIDTH * x + "px"
+                        gameFieldDiv.style.top = this.layoutConsts.gameField.HEIGHT * y + "px"
+
+                        //  tworzenia obiektu field
+                        let field = {
+                            hasFruit: false,
+                            div: gameFieldDiv
+                        }
+                        this.gameVariables.gameTable[x][y] = field
+                    }
+                }
+            },
+            generateSnake: function () {
+                //  funkcja gromadzi funkcje tworzące węża
+
+                this.generateRandomLocationAndDirectionForSnake()
+                this.instertFunctionsIntoSnake()
+                this.gameVariables.snake.drawSnake()
+                this.generateRandomFruit()
+                this.setInitialKeyEvents()
+
+            },
+            generateRandomLocationAndDirectionForSnake: function () {
+                //  funkcja generuje losowe, początkowe położenie początkowe i kierunek ruchu węża
+                //  wylosowane dane umieszczane są w this.gameVariables.snake
+                //  przy położeniach na krańcach mapy, kierunek nie może być ku nim - by snake sam nie wlazł w barierę
+
+                // losowanie położenia
+                let x = Math.round(Math.random() * (this.gameParams.GAME_TABLE_WIDTH - 1))
+                let y = Math.round(Math.random() * (this.gameParams.GAME_TABLE_HEIGHT - 1))
+
+                // losowanie kierunku
+
+                let direction = null
+                while (true) {   // zrywamy breakiem
+                    direction = Math.round(Math.random() * (Object.keys(this.gameConsts.directions).length - 1))
+
+                    // sprawdzamy, czy kierunek nie jest w barierę
+                    if (x == 0
+                        && direction == this.gameConsts.directions.LEFT) {
+                        continue // wymuszamy wywołanie pętli od nowa
+                    }
+                    if (x == this.gameParams.GAME_TABLE_WIDTH - 1
+                        && direction == this.gameConsts.directions.RIGHT) {
+                        continue // wymuszamy wywołanie pętli od nowa
+                    }
+                    if (y == 0
+                        && direction == this.gameConsts.directions.UP) {
+                        continue // wymuszamy wywołanie pętli od nowa
+                    }
+                    if (y == this.gameParams.GAME_TABLE_HEIGHT - 1
+                        && direction == this.gameConsts.directions.DOWN) {
+                        continue // wymuszamy wywołanie pętli od nowa
+                    }
+
+                    // jeżeli udało się przejść przez powyższe 4 fory, czyli keirunek nie jest w sąsiednią ścianę
+                    break
+
+                }
+
+                // przydzielenie wartości do obiektu snake
+                this.gameVariables.snake.direction = direction
+                this.gameVariables.snake.lastDirection = direction
+                console.log("wylosowany kierunek: ", direction);
+
+                this.gameVariables.snake.bodyElements.push({
+                    x: x,
+                    y: y,
+                    field: this.gameVariables.gameTable[x][y]
+                })
+                console.log("Wylosowane współrzędne węża: x = ", x, " y = ", y);
+            },
+            instertFunctionsIntoSnake: function () {
+                // funkcja wypełnia węża funkcjami z obiektu this.snakeFunkctions
+                for (let key of Object.keys(this.snakeFunctions)) {
+                    this.gameVariables.snake[key] = this.snakeFunctions[key]
+                }
+            },
+            finishLostGame: function () {
+                //funkcja kończy grę, jeżeli została ona przegrana
+                clearInterval(this.gameVariables.snakeMovementInterval)
+                alert("Gra została przegrana. Osiągnięta długość węża to: " + this.gameVariables.snake.bodyElements.length)
+            },
+            formatFieldAsEmpty: function (field) {
+                // funkcja z pola o podanych robi pole czyte
+                //jako argument przyjmuje obiekt typu field
+
+                field.hasFruit = false
+                let div = field.div
+                div.style.backgroundImage = ""
+                div.style.backgroundColor = ""
+
+            },
+            generateRandomFruit: function (previousX, previousY) {
+                // funkcja generuje losowo miejsce owocu i wywołuje funkcję drawFruit()
+                //ewentualnymi parametrami są współrzędne poprzedniego owocu
+                let x = null
+                let y = null
+
+                while (true) {
+                    x = Math.round(Math.random() * (this.gameParams.GAME_TABLE_WIDTH - 1))
+                    y = Math.round(Math.random() * (this.gameParams.GAME_TABLE_HEIGHT - 1))
+
+                    let areCoordsGood = true
+                    if (x == previousX && y == previousY) {
+                        //jeżeli wylosowane współrzęnde, to te same, co wcześniej
+                        console.log("Ups, wylosowano, znowu te same współrzędne");
+                        continue
+                    } else {
+                        //sprawdzamy, czy dane pole to nie wąż
+                        for (let i of this.gameVariables.snake.bodyElements) {
+                            if (i.x == x && i.y == y) {
+                                //jeżeli wylosowane współrzędne, to współrzędne węża
+                                console.log("Oj, wylosowane współrzędne należące do węża");
+                                areCoordsGood = false
+                            }
+                        }
+                        if (areCoordsGood) {
+                            //console.log("Wylosowane współrzędne owocu: x = ", x, " y = ", y);
+                            break
+                        } else {
+                            continue
+                        }
+                    }
+                }
+                this.drawFruit(x, y)
+            },
+            drawFruit: function (x, y) {
+                // funkcja rysuje owoc ze współrzędnych
+                this.gameVariables.gameTable[x][y].hasFruit = true
+                this.gameVariables.gameTable[x][y].div.style.backgroundColor = "yellow"
+            },
+            initiateSnakeMovement: function () {
+                // funkcja zapoczątkowuje ruch węża
+                this.gameVariables.snakeMovementInterval = setInterval(function () {
+                    gameManager.gameVariables.snake.moveSnake()
+                }, this.gameParams.SNAKE_MOVEMENT_INTERVAL)
+            },
+            setInitialKeyEvents: function () {
+                //funkcja ustawia pierwsze listenery, które umożliwiają odpalenie gry naciśnieciem WSADu lub strzałek
+
+                document.onkeydown = function (e) {
+
+                    let key = e.key
+
+                    if (key == "ArrowLeft"
+                        || key == "ArrowDown"
+                        || key == "ArrowRight"
+                        || key == "ArrowUp"
+                        || key == "a"
+                        || key == "s"
+                        || key == "d"
+                        || key == "w") {
+                        gameManager.setKeyEvents()
+                        gameManager.initiateSnakeMovement()
+                    }
+                }
+            },
+            setKeyEvents: function () {
+                // funkcja ustawia wydarzenia klawiaturowe
+                //spina po prostu funkcje turn[direction] z wydarzeniami klawiaturowymi
+
+                document.onkeydown = function (e) {
+                    switch (e.key) {
+                        case "ArrowLeft":
+                            gameManager.gameVariables.snake.turnLeft()
+                            break
+                        case "ArrowDown":
+                            gameManager.gameVariables.snake.turnDown()
+                            break
+                        case "ArrowRight":
+                            gameManager.gameVariables.snake.turnRight()
+                            break
+                        case "ArrowUp":
+                            gameManager.gameVariables.snake.turnUp()
+                            break
+                        //dla wsadu
+                        case "a":
+                            gameManager.gameVariables.snake.turnLeft()
+                            break
+                        case "s":
+                            gameManager.gameVariables.snake.turnDown()
+                            break
+                        case "d":
+                            gameManager.gameVariables.snake.turnRight()
+                            break
+                        case "w":
+                            gameManager.gameVariables.snake.turnUp()
+                            break
+                    }
+                }
+            },
+            snakeFunctions: {
+                // funkcje wewnętrzne węża, które przekazywane mu są przez funkcję this.insertFunctionsIntoSnake
+                drawSnake: function () {
+                    // funkcja rysuje węża na podstawie danych z gameManager.gameVariables.snake
+                    // this to snake w tej funkcji
+
+                    //console.log("this.bodyElements[0]: ", this.bodyElements[0]);
+                    //rsujemy głowę
+                    if (this.direction == gameManager.gameConsts.directions.UP) {
+                        this.bodyElements[0].field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_BEGINNING_UP + "\")"
+                        this.bodyElements[0].field.div.style.backgroundSize = "cover"
+                    } else if (this.direction == gameManager.gameConsts.directions.RIGHT) {
+                        this.bodyElements[0].field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_BEGINNING_RIGHT + "\")"
+                        this.bodyElements[0].field.div.style.backgroundSize = "cover"
+                    } else if (this.direction == gameManager.gameConsts.directions.DOWN) {
+                        this.bodyElements[0].field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_BEGINNING_DOWN + "\")"
+                        this.bodyElements[0].field.div.style.backgroundSize = "cover"
+                    } else if (this.direction == gameManager.gameConsts.directions.LEFT) {
+                        this.bodyElements[0].field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_BEGINNING_LEFT + "\")"
+                        this.bodyElements[0].field.div.style.backgroundSize = "cover"
+                    }
+
+                    // dla węży o długości co najmniej 2, trzeba jeszcze narysować tył węża
+                    if (this.bodyElements.length > 1) {
+
+                        // a dla węży dłuższych niż 2 elementy, trzeba narysować ciało
+                        if (this.bodyElements.length > 2) {
+                            for (let i = 1; i < this.bodyElements.length - 1; i++) { // dla każdego elementu środka węża (oprócz głowy i końca)
+
+                                let currentElement = this.bodyElements[i]
+                                // dla elementu w linii prostej z sąsiadami
+                                //nie może być tak, że sąsiedzi mają jakąś wspólną współrzędną, a dany element jej nie ma, bo zakręty są o 90 stopni - istnieją więc 2 sytuacje: istnieje jakaś wspólna współrzędna dla wszystkich 3 elementów albo sąsiedzi nie mają żadnej
+                                //sprawdzamy więc tylko, czy sąsiedzi mają jakąś wspólną współrzędną
+                                if (this.bodyElements[i - 1].x == this.bodyElements[i + 1].x) { // PIONOWO
+                                    //nie może się okazać, że wyjdziemy poza tablicę, bo głowa i koniec węża na pewno istnieją
+                                    currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_VERTICAL + "\")"
+                                    currentElement.field.div.style.backgroundSize = "cover"
+
+                                } else if (this.bodyElements[i - 1].y == this.bodyElements[i + 1].y) { //POZIOMO
+                                    //nie może się okazać, że wyjdziemy poza tablicę, bo głowa i koniec węża na pewno istnieją
+                                    currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_HORIZONTAL + "\")"
+                                    currentElement.field.div.style.backgroundSize = "cover"
+
+                                } else { // jeżeli jednak jesteśmy na ZAKRĘCIE
+                                    // sprawdzanie kierunków skrętu
+                                    //niezależnie od tego, jaki zwrot ma prędkość węża, wyświetlamy to samo
+                                    //interesuje nas, w jakim kierunku się porusza
+                                    //przydielamy więc do zmiennych poprzednika i następcę danego elementu węża i sprawdzamy
+                                    //a potem zamieniamy wartości w zmiennych i robimy to samo
+
+                                    // przydzielenie sąsiadów do zmiennych
+                                    let previousNeighbour = this.bodyElements[i - 1]
+                                    let nextNeighbour = this.bodyElements[i + 1]
+
+                                    drawSnakeMiddleTurns(previousNeighbour, nextNeighbour, currentElement)
+                                    drawSnakeMiddleTurns(nextNeighbour, previousNeighbour, currentElement)
+                                }
+
+                                // this.bodyElements[i].field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE + "\")"
+                                // this.bodyElements[i].field.div.style.backgroundSize = "cover"
+                            }
+                        }
+
+                        // dodanie końca węża
+                        //liczymy różnice współrzędnych ostatniego i przedostatniego segmentu węża
+                        //w jednym wymiarze musi być 0 a w drugim będzie 1 lub -1
+                        //jeżeli jest 1 - to koniec węża jest skierowany w lewo lub w górę
+                        //jeżeli jest -1 - to koniec węża skierowany jest w prawo lub w dół
+
+                        let lastBodyElement = this.bodyElements[this.bodyElements.length - 1]
+                        let verticalSubtraction = lastBodyElement.y - this.bodyElements[this.bodyElements.length - 2].y
+                        let horizontalSubtraction = lastBodyElement.x - this.bodyElements[this.bodyElements.length - 2].x
+
+                        //rozpatrujemy przypadki
+                        if (verticalSubtraction > 0) { // w górę
+                            lastBodyElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_END_UP + "\")"
+                            lastBodyElement.field.div.style.backgroundSize = "cover"
+                        } else if (verticalSubtraction < 0) { // w dół
+                            lastBodyElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_END_DOWN + "\")"
+                            lastBodyElement.field.div.style.backgroundSize = "cover"
+                        } else { // jeżeli indeksy w poziomie są takie same - rozpatrujemy pion
+                            if (horizontalSubtraction > 0) { //w lewo
+                                lastBodyElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_END_LEFT + "\")"
+                                lastBodyElement.field.div.style.backgroundSize = "cover"
+                            } else { // teraz już nie może być zerem, czyli < 0 - w prawo
+                                lastBodyElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_END_RIGHT + "\")"
+                                lastBodyElement.field.div.style.backgroundSize = "cover"
+                            }
+                        }
+                    }
+
+                    function drawSnakeMiddleTurns(previousNeighbour, nextNeighbour, currentElement) {
+                        // funkcja rysuje zakręty węża
+                        //należy ją wywołać z parametrami w jednej i odwrotnej kolejności xd
+
+                        // dół - lewo
+                        if (previousNeighbour.y > currentElement.y
+                            && nextNeighbour.x < currentElement.x) {
+                            currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_TURN_DOWN_LEFT + "\")"
+                            currentElement.field.div.style.backgroundSize = "cover"
+                        }
+
+                        // lewo - góra
+                        if (previousNeighbour.x < currentElement.x
+                            && nextNeighbour.y < currentElement.y) {
+                            currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_TURN_LEFT_UP + "\")"
+                            currentElement.field.div.style.backgroundSize = "cover"
+                        }
+
+                        // góra - prawo
+                        if (previousNeighbour.y < currentElement.y
+                            && nextNeighbour.x > currentElement.x) {
+                            currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_TURN_UP_RIGHT + "\")"
+                            currentElement.field.div.style.backgroundSize = "cover"
+                        }
+
+                        // prawo - dół
+                        if (previousNeighbour.x > currentElement.x
+                            && nextNeighbour.y > currentElement.y) {
+                            currentElement.field.div.style.backgroundImage = "url(\"" + gameManager.layoutConsts.snakeImagesPaths.SNAKE_MIDDLE_TURN_RIGHT_DOWN + "\")"
+                            currentElement.field.div.style.backgroundSize = "cover"
+                        }
+                    }
+                },
+                moveSnake: function () {
+                    // funkcja przesuwa węża znając kierunek węża
+                    //przesuwa, czyli przypisuje nowe divy do kolejnych segmentów węża
+                    //potem wywoływana jest funkcja this.drawSnake, która wyświetla zmianę
+                    //najpierw przenoszona jest głowa
+                    //potem każdy, aż do przedostatniego, element jest przenoszony na miejsce poprzedniego
+                    //ustawiany i orientowany jest koniec, po czym zaczodzi czyszczenie pozostawionego pola
+
+                    //  przesuwanie głowy
+                    let firstElement = this.bodyElements[0]
+                    let previousX = firstElement.x
+                    let previousY = firstElement.y
+                    let previousFirstElementField = firstElement.field
+
+                    //wariant w górę
+                    if (this.direction == gameManager.gameConsts.directions.UP) {
+                        if (firstElement.y > 0) { //zabezpieczenie, by nie wyskoczyć poza planszę
+
+                            this.eat(firstElement.x, firstElement.y - 1) //sprawdzenie, czy czegoś tu nie ma
+                            firstElement.y--
+                            firstElement.field = gameManager.gameVariables.gameTable[firstElement.x][firstElement.y]
+                        } else { //jeżeli wyskoczyliśmy poza tablicę
+                            gameManager.finishLostGame()
+                        }
+                    }
+                    //wariant w prawo
+                    if (this.direction == gameManager.gameConsts.directions.RIGHT) {
+                        if (firstElement.x < gameManager.gameParams.GAME_TABLE_WIDTH - 1) { //zabezpieczenie, by nie wyskoczyć poza planszę
+
+                            this.eat(firstElement.x + 1, firstElement.y) //sprawdzenie, czy czegoś tu nie ma
+                            firstElement.x++
+                            firstElement.field = gameManager.gameVariables.gameTable[firstElement.x][firstElement.y]
+                        } else { //jeżeli wyskoczyliśmy poza tablicę
+                            gameManager.finishLostGame()
+                        }
+                    }
+                    //wariant w lewo
+                    if (this.direction == gameManager.gameConsts.directions.LEFT) {
+                        if (firstElement.x > 0) { //zabezpieczenie, by nie wyskoczyć poza planszę
+
+                            this.eat(firstElement.x - 1, firstElement.y) //sprawdzenie, czy czegoś tu nie ma
+                            firstElement.x--
+                            firstElement.field = gameManager.gameVariables.gameTable[firstElement.x][firstElement.y]
+                        } else { //jeżeli wyskoczyliśmy poza tablicę
+                            gameManager.finishLostGame()
+                        }
+                    }
+                    //wariant w dół
+                    if (this.direction == gameManager.gameConsts.directions.DOWN) {
+                        if (firstElement.y < gameManager.gameParams.GAME_TABLE_HEIGHT - 1) { //zabezpieczenie, by nie wyskoczyć poza planszę
+
+                            this.eat(firstElement.x, firstElement.y + 1) //sprawdzenie, czy czegoś tu nie ma
+                            firstElement.y++
+                            firstElement.field = gameManager.gameVariables.gameTable[firstElement.x][firstElement.y]
+                        } else { //jeżeli wyskoczyliśmy poza tablicę
+                            gameManager.finishLostGame()
+                        }
+                    }
+
+                    //  przesuwaie kolejnych elementów aż do przedostatniego
+                    for (let i = 1; i < this.bodyElements.length - 1; i++) {
+                        let tmpBodyElement = this.bodyElements[i]
+                        let tmpX = tmpBodyElement.x
+                        let tmpY = tmpBodyElement.y
+
+                        tmpBodyElement.x = previousX
+                        tmpBodyElement.y = previousY
+                        tmpBodyElement.field = gameManager.gameVariables.gameTable[previousX][previousY]
+
+                        previousX = tmpX
+                        previousY = tmpY
+                    }
+
+                    //  przesunięcie końca węża
+                    if (this.bodyElements.length > 1) {
+                        let lastBodyElement = this.bodyElements[this.bodyElements.length - 1]
+                        gameManager.formatFieldAsEmpty(lastBodyElement.field)
+                        lastBodyElement.x = previousX
+                        lastBodyElement.y = previousY
+                        lastBodyElement.field = gameManager.gameVariables.gameTable[previousX][previousY]
+                    } else {
+                        gameManager.formatFieldAsEmpty(previousFirstElementField)
+                    }
+                    this.lastDirection = this.direction
+                    //  wywołanie metody drawSnake
+                    this.drawSnake()
+                },
+                eat: function (x, y) {
+                    // funkcja sprawdza, czy w danym punkcie wąż ma co zjeść i wywołuje odpowiednie funkcje
+                    //jeżeli w danym punkcie jest owoc, to wydłuża węża wywołując grow()
+                    //a jeżeli w danym punkcie jest wąż, to wywołuje gameManager.finishGameLost()
+
+                    // sprawdzanie, czy w tym punkcie jest owoc
+                    if (gameManager.gameVariables.gameTable[x][y].hasFruit) {
+                        gameManager.formatFieldAsEmpty(gameManager.gameVariables.gameTable[x][y])
+                        this.grow()
+                        gameManager.generateRandomFruit(x, y)
+                    } else { // nie może pole zarazem posiadać w sobie owoca i węża
+                        for (let i of this.bodyElements) {
+                            if (i.x == x && i.y == y) {
+                                gameManager.finishLostGame()
+                            }
+                        }
+                    }
+
+                },
+                grow: function () {
+                    // funkcja odpowiada za rośnięcie węża
+                    //dodaje nowy element do tablicy bodyElements oraz podaje temu elementowi tego samego diva, którego ma ostatni element węża
+
+                    let lastElement = this.bodyElements[this.bodyElements.length - 1]
+                    this.bodyElements.push({
+                        x: lastElement.x,
+                        y: lastElement.y,
+                        field: {
+                            hasFruit: false,
+                            div: lastElement.field.div
+                        }
+                    })
+                },
+                turnUp: function () {
+                    // funkcja skręca węża w górę
+                    if (this.lastDirection != gameManager.gameConsts.directions.DOWN) {
+                        this.direction = gameManager.gameConsts.directions.UP
+                    }
+                },
+                turnLeft: function () {
+                    // funkcja skręca węża w lewo
+                    if (this.lastDirection != gameManager.gameConsts.directions.RIGHT) {
+                        this.direction = gameManager.gameConsts.directions.LEFT
+                    }
+                },
+                turnDown: function () {
+                    // funkcja skręca węża w dół
+                    if (this.lastDirection != gameManager.gameConsts.directions.UP) {
+                        this.direction = gameManager.gameConsts.directions.DOWN
+                    }
+                },
+                turnRight: function () {
+                    // funkcja skręca węża w górę
+                    if (this.lastDirection != gameManager.gameConsts.directions.LEFT) {
+                        this.direction = gameManager.gameConsts.directions.RIGHT
+                    }
+                }
+            }
+        }
+        gameManager.initiateGame()
+    </script>
+</body>
+
+</html>
